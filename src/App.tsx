@@ -16,7 +16,9 @@ import {
   TrendingDown,
   UserPlus,
   X,
-  FileDown
+  FileDown,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { 
@@ -50,15 +52,12 @@ type View = 'input' | 'summary' | 'stats';
 
 export default function App() {
   const [view, setView] = useState<View>('input');
-  const [currentWeek, setCurrentWeek] = useState(1);
+  const [currentWeek, setCurrentWeek] = useState(() => Number(localStorage.getItem('thi-dua-week')) || 1);
   const [students, setStudents] = useState<Student[]>(() => {
     const saved = localStorage.getItem('thi-dua-students');
     return saved ? JSON.parse(saved) : DEFAULT_STUDENTS;
   });
-  const [logs, setLogs] = useState<Log[]>(() => {
-    const saved = localStorage.getItem('thi-dua-logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [logs, setLogs] = useState<Log[]>([]);
   const [classInfo, setClassInfo] = useState<ClassInfo>(() => {
     const saved = localStorage.getItem('thi-dua-class');
     return saved ? JSON.parse(saved) : { size: 44, absent: 0, startDate: '', endDate: '' };
@@ -71,6 +70,8 @@ export default function App() {
   const [selectedCriteria, setSelectedCriteria] = useState<Record<string, number>>({});
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState(() => localStorage.getItem('thi-dua-gs-url') || 'https://script.google.com/macros/s/AKfycbzpc5FxdQ7Z7D8WkmGYQYAYl01IYu9DhUwma9PCH9-PaxOKOvyjrbcu4Ulo77UASYxXdA/exec');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Persistence
   useEffect(() => {
@@ -78,12 +79,16 @@ export default function App() {
   }, [students]);
 
   useEffect(() => {
-    localStorage.setItem('thi-dua-logs', JSON.stringify(logs));
-  }, [logs]);
-
-  useEffect(() => {
     localStorage.setItem('thi-dua-class', JSON.stringify(classInfo));
   }, [classInfo]);
+
+  useEffect(() => {
+    localStorage.setItem('thi-dua-gs-url', googleSheetsUrl);
+  }, [googleSheetsUrl]);
+
+  useEffect(() => {
+    localStorage.setItem('thi-dua-week', currentWeek.toString());
+  }, [currentWeek]);
 
   // Derived Data
   const weekLogs = useMemo(() => logs.filter(l => l.week === currentWeek), [logs, currentWeek]);
@@ -190,7 +195,7 @@ export default function App() {
       text += `Từ ngày ${classInfo.startDate} đến ngày ${classInfo.endDate}\n`;
     }
     text += `Sĩ số: ${classInfo.size} | Vắng: ${classInfo.absent} | Hiện diện: ${present}\n`;
-    text += `Quỹ lớp ban đầu: ${CLASS_BASE_POINTS}\n`;
+    text += `Quỹ điểm ban đầu: ${CLASS_BASE_POINTS}\n`;
     text += `-------------------------------------------\n\n`;
     
     text += `I. XẾP HẠNG TỔ (Bắt đầu từ 0)\n`;
@@ -263,23 +268,58 @@ export default function App() {
     XLSX.writeFile(wb, `Bao_Cao_Thi_Dua_10A7_Tuan_${currentWeek}.xlsx`);
   };
 
+  const syncToGoogleSheets = async () => {
+    if (!googleSheetsUrl) {
+      alert('Vui lòng nhập URL Google Apps Script trong phần cài đặt bên dưới.');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const data = {
+        week: currentWeek,
+        logs: weekLogs,
+        rankings: rankings,
+        groupStats: groupStats,
+        timestamp: new Date().toISOString()
+      };
+
+      const response = await fetch(googleSheetsUrl, {
+        method: 'POST',
+        mode: 'no-cors', // Apps Script requires no-cors for simple POST
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      // Since we use no-cors, we can't see the response body, but we can assume success if no error thrown
+      alert('Đã gửi yêu cầu đồng bộ! Vui lòng kiểm tra Google Sheets của bạn.');
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Lỗi đồng bộ: ' + (error instanceof Error ? error.message : 'Không rõ nguyên nhân'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-700 font-sans pb-20">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-700 font-sans pb-20 text-[1.05rem]">
       {/* Header */}
       <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-100">
+          <div className="flex items-center justify-between h-20">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-100 text-xl">
                 10A7
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Quản Lý Thi Đua</h1>
-                <p className="text-[10px] text-slate-400 font-medium uppercase">Năm học 2025 - 2026</p>
+                <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">QUẢN LÝ THI ĐUA HÀNG TUẦN</h1>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Năm học 2025 - 2026</p>
               </div>
             </div>
 
-            <nav className="flex gap-1 sm:gap-4">
+            <nav className="flex gap-1 sm:gap-6">
               {[
                 { id: 'input', label: 'Ghi Nhận', icon: ClipboardList },
                 { id: 'summary', label: 'Tổng Kết', icon: Trophy },
@@ -289,13 +329,13 @@ export default function App() {
                   key={t.id}
                   onClick={() => setView(t.id as View)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all",
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black transition-all uppercase tracking-wide",
                     view === t.id 
-                      ? "bg-indigo-50 text-indigo-600" 
+                      ? "bg-indigo-50 text-indigo-600 shadow-sm" 
                       : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
                   )}
                 >
-                  <t.icon className="w-4 h-4" />
+                  <t.icon className="w-5 h-5" />
                   <span className="hidden sm:inline">{t.label}</span>
                 </button>
               ))}
@@ -380,7 +420,7 @@ export default function App() {
             >
               <div className="flex justify-between items-end">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Ghi Nhận Thi Đua</h2>
+                  <h2 className="text-2xl font-black text-orange-600 uppercase tracking-tight">GHI NHẬN THI ĐUA</h2>
                   <p className="text-slate-400 text-sm">Cập nhật vi phạm và thành tích của học sinh.</p>
                 </div>
                 <button 
@@ -518,7 +558,7 @@ export default function App() {
             >
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Tổng Kết Tuần {currentWeek}</h2>
+                  <h2 className="text-2xl font-black text-orange-600 uppercase tracking-tight">TỔNG KẾT THI ĐUA TUẦN {currentWeek}</h2>
                   <p className="text-slate-400 text-sm">Kết quả thi đua và xếp hạng của lớp.</p>
                 </div>
                 <button 
@@ -533,22 +573,26 @@ export default function App() {
               {/* Class Summary Stats (Moved to Top) */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Quỹ lớp gốc', value: CLASS_BASE_POINTS, color: 'slate' },
+                  { label: 'Quỹ điểm ban đầu', value: CLASS_BASE_POINTS, color: 'slate' },
                   { label: 'Tổng cộng (+)', value: `+${(Object.values(groupStats) as {p: number, m: number}[]).reduce((acc, g) => acc + g.p, 0)}`, color: 'emerald' },
                   { label: 'Tổng trừ (-)', value: `-${(Object.values(groupStats) as {p: number, m: number}[]).reduce((acc, g) => acc + g.m, 0)}`, color: 'rose' },
                   { 
-                    label: 'Hiệu số lớp', 
+                    label: 'Tổng điểm', 
                     value: CLASS_BASE_POINTS + (Object.values(groupStats) as {p: number, m: number}[]).reduce((acc, g) => acc + g.p, 0) - (Object.values(groupStats) as {p: number, m: number}[]).reduce((acc, g) => acc + g.m, 0), 
-                    color: 'indigo',
+                    color: 'rose',
                     highlight: true
                   },
                 ].map((s, i) => (
                   <div key={i} className={cn(
-                    "bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm",
-                    s.highlight && "border-b-4 border-b-indigo-500"
+                    "bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm transition-all",
+                    s.highlight && "border-b-4 border-b-rose-500 scale-[1.02] bg-rose-50/20"
                   )}>
                     <p className={cn("text-[10px] font-bold uppercase mb-2", `text-${s.color}-500`)}>{s.label}</p>
-                    <p className={cn("text-2xl font-black", `text-${s.color}-700`)}>{s.value}</p>
+                    <p className={cn(
+                      "font-black", 
+                      s.highlight ? "text-4xl text-rose-600" : "text-2xl text-slate-700",
+                      !s.highlight && `text-${s.color}-700`
+                    )}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -638,7 +682,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-8"
             >
-              <h2 className="text-2xl font-bold text-slate-900">Thống Kê Chi Tiết</h2>
+              <h2 className="text-2xl font-black text-orange-600 uppercase tracking-tight">THỐNG KÊ CHI TIẾT</h2>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
@@ -961,24 +1005,35 @@ export default function App() {
                 {generateReportText()}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
                 <button 
                   onClick={copyToClipboard}
-                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                  className="py-3.5 bg-indigo-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Copy className="w-4 h-4" />
-                  Sao Chép Báo Cáo
+                  Sao Chép
                 </button>
                 <button 
                   onClick={exportToExcel}
-                  className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                  className="py-3.5 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
                 >
                   <FileDown className="w-4 h-4" />
                   Xuất Excel
                 </button>
                 <button 
+                  onClick={syncToGoogleSheets}
+                  disabled={isSyncing}
+                  className={cn(
+                    "py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2",
+                    isSyncing && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+                  {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ Sheets'}
+                </button>
+                <button 
                   onClick={() => setIsReportModalOpen(false)}
-                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all"
+                  className="py-3.5 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all"
                 >
                   Đóng
                 </button>
