@@ -70,7 +70,7 @@ export default function App() {
   const [selectedCriteria, setSelectedCriteria] = useState<Record<string, number>>({});
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [googleSheetsUrl, setGoogleSheetsUrl] = useState(() => localStorage.getItem('thi-dua-gs-url') || 'https://script.google.com/macros/s/AKfycbzpc5FxdQ7Z7D8WkmGYQYAYl01IYu9DhUwma9PCH9-PaxOKOvyjrbcu4Ulo77UASYxXdA/exec');
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState(() => localStorage.getItem('thi-dua-gs-url') || 'https://script.google.com/macros/s/AKfycbwC7RBraMCjHvu6P2wLT_llrccRLA4d8vn3jiprOmKIPsyoflzq1e5aZtK1Hg40jXU/exec');
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Persistence
