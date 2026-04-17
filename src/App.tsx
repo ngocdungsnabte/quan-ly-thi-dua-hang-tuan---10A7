@@ -165,7 +165,8 @@ export default function App() {
     });
 
     setLogs(prev => [...newLogs, ...prev]);
-    setIsActionModalOpen(false);
+    // Keep modal open as requested
+    // setIsActionModalOpen(false); 
     setSelectedCriteria({});
     setSelectedStudentId(null);
   };
